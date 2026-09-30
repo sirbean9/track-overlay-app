@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Track Overlay</title>
+<meta name="description" content="Lap timing, sector splits and telemetry drawn onto your GoPro track-day footage. Free for macOS and Windows.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: pit-wall timing screen. One dark tarmac ground, a timing-tower readout under the hero,
+   then image-led bands. Yellow is the app's own accent; purple and green keep their timing meaning (best / faster). */
+:root{
+  --tarmac:#0c0e12;
+  --panel:#151920;
+  --panel-2:#1c212a;
+  --line:#272d38;
+  --text:#e9ebef;
+  --muted:#8e96a6;
+  --flag:#ffd23c;
+  --flag-ink:#1a1400;
+  --best:#b675ff;
+  --gain:#3fd67f;
+  --loss:#ff5a6a;
+  --f-display:"Saira Condensed","Arial Narrow",Impact,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-data:"JetBrains Mono",ui-monospace,"SF Mono",Consolas,monospace;
+  --wrap:1180px;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{background:var(--tarmac);color:var(--text);font:400 17px/1.55 var(--f-body);margin:0;-webkit-font-smoothing:antialiased}
+img{max-width:100%;height:auto;display:block}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--flag);outline-offset:3px;border-radius:4px}
+.wrap{max-width:var(--wrap);margin-inline:auto;padding-inline:20px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:.005em}
+h2{font-size:clamp(34px,5vw,52px);line-height:1;font-weight:800;text-transform:uppercase}
+h3{font-size:22px;font-weight:700;line-height:1.1;text-transform:uppercase;letter-spacing:.02em}
+p{margin:0}
+.lede{color:var(--muted);max-width:60ch;font-size:18px}
+.eyebrow{font:700 12px/1 var(--f-data);letter-spacing:.14em;text-transform:uppercase;color:var(--flag)}
+.num{font-family:var(--f-data);font-variant-numeric:tabular-nums}
+
+/* draft notice */
+.draft{background:var(--flag);color:var(--flag-ink);font:600 14px/1.4 var(--f-body);text-align:center;padding:8px 16px}
+
+/* nav */
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:color-mix(in srgb,var(--tarmac) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;gap:24px;height:60px}
+.brand{display:flex;align-items:center;gap:10px;font:800 22px/1 var(--f-display);text-transform:uppercase;letter-spacing:.03em;text-decoration:none}
+.chequer{width:22px;height:22px;flex:none;background:conic-gradient(var(--text) 25%,transparent 0 50%,var(--text) 0 75%,transparent 0) 0 0/11px 11px}
+.nav-links{display:flex;gap:22px;margin-left:auto;font-weight:500;font-size:15px}
+.nav-links a{text-decoration:none;color:var(--muted)}
+.nav-links a:hover{color:var(--text)}
+.nav .btn{padding:9px 16px;font-size:15px}
+@media (max-width:720px){.nav-links{display:none}.nav .btn{margin-left:auto}}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:10px;padding:14px 22px;border-radius:8px;font:600 17px/1 var(--f-body);text-decoration:none;border:1px solid transparent;transition:transform .15s,background .15s}
+.btn:hover{transform:translateY(-1px)}
+.btn-primary{background:var(--flag);color:var(--flag-ink)}
+.btn-ghost{border-color:var(--line);background:var(--panel)}
+.btn-ghost:hover{background:var(--panel-2)}
+.btn svg{width:18px;height:18px;flex:none}
+.btn small{font:500 12px/1 var(--f-data);opacity:.7}
+
+/* hero */
+.hero{padding-block:64px 0}
+.hero-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:48px;align-items:center}
+.hero h1{font-size:clamp(46px,7.2vw,92px);line-height:.9;font-weight:800;text-transform:uppercase;font-style:italic;letter-spacing:-.005em}
+.hero h1 em{font-style:inherit;color:var(--flag)}
+.hero .lede{margin-top:22px}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+.fine{margin-top:14px;color:var(--muted);font-size:14px}
+.shot{border-radius:12px;overflow:hidden;border:1px solid var(--line);background:#000;box-shadow:0 30px 80px -30px rgba(0,0,0,.8)}
+.hero .shot{transform:perspective(1600px) rotateY(-6deg);transform-origin:left center}
+@media (max-width:900px){.hero-grid{grid-template-columns:1fr}.hero .shot{transform:none}}
+
+/* timing tower readout */
+.readout{margin-top:56px;border-block:1px solid var(--line);background:var(--panel)}
+.readout .wrap{display:grid;grid-template-columns:auto repeat(4,minmax(0,1fr));align-items:stretch}
+.readout .tag{display:flex;flex-direction:column;justify-content:center;gap:4px;padding:18px 24px 18px 0;border-right:1px solid var(--line)}
+.readout .tag b{font:700 18px/1 var(--f-display);text-transform:uppercase}
+.readout .tag span{font-size:13px;color:var(--muted)}
+.cell{padding:16px 18px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:6px;min-width:0}
+.cell:last-child{border-right:0}
+.cell .k{font:700 11px/1 var(--f-data);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.cell .v{font:700 clamp(20px,2.4vw,28px)/1 var(--f-data);font-variant-numeric:tabular-nums}
+.cell .s{font-size:12px;color:var(--muted)}
+.v.best{color:var(--best)}
+@media (max-width:760px){
+  .readout .wrap{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .readout .tag{grid-column:1/-1;border-right:0;border-bottom:1px solid var(--line);padding:16px 0}
+  .cell{padding-inline:0 16px}
+  .cell:nth-child(odd){border-right:0}
+  .cell:nth-child(n+4){border-top:1px solid var(--line)}
+}
+
+/* sections */
+section{padding-block:96px 0}
+.sec-head{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px 48px;align-items:end;margin-bottom:40px}
+.sec-head .eyebrow{grid-column:1/-1}
+@media (max-width:800px){.sec-head{grid-template-columns:1fr}}
+
+/* feature tiles */
+.tiles{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.tile figure{margin:0;flex:1;display:grid;place-items:center;background:#0a0b0e;border-radius:8px;padding:18px;min-height:140px}
+.tile figure{grid-template-columns:minmax(0,1fr);justify-items:center}
+.tile figure img{border-radius:8px;width:100%;height:auto}
+.tile .cap{display:flex;flex-direction:column;gap:4px}
+.tile .cap p{color:var(--muted);font-size:15px}
+.span-4{grid-column:span 4}.span-5{grid-column:span 5}.span-6{grid-column:span 6}.span-7{grid-column:span 7}.span-8{grid-column:span 8}.span-12{grid-column:span 12}
+@media (max-width:900px){.tiles>*{grid-column:span 6}.tiles>.wide{grid-column:span 12}}
+@media (max-width:600px){.tiles>*{grid-column:span 12}}
+.tile.wide figure{padding:0;background:none}
+.endcard figure img{width:100%}
+.w-sm{max-width:220px}.w-md{max-width:320px}.w-lg{max-width:360px}
+
+/* analysis rows */
+.rows{display:grid;gap:16px}
+.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:860px){.row{grid-template-columns:1fr}}
+.panel-shot{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel-shot img{border-radius:8px;border:1px solid var(--line);width:100%}
+.panel-shot p{color:var(--muted);font-size:15px}
+.tall{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:16px}
+.tall .stack{display:grid;gap:16px;align-content:start}
+@media (max-width:860px){.tall{grid-template-columns:1fr}}
+.panel-shot.small-img img{max-width:260px}
+
+/* steps */
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;counter-reset:s}
+.step{border-top:3px solid var(--line);padding-top:18px;display:flex;flex-direction:column;gap:10px}
+.step:first-child{border-top-color:var(--flag)}
+.step .n{font:700 13px/1 var(--f-data);color:var(--muted);letter-spacing:.1em}
+.step p{color:var(--muted);font-size:16px}
+.step kbd{font:500 13px var(--f-data);background:var(--panel-2);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 6px;color:var(--text)}
+@media (max-width:760px){.steps{grid-template-columns:1fr}}
+
+/* feature list */
+.chips{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:10px}
+.chips li{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 14px;font-size:15px;font-weight:500}
+/* download */
+.dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:760px){.dl{grid-template-columns:1fr}}
+.dl-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:18px}
+.dl-card .os{display:flex;align-items:center;gap:14px}
+.dl-card .os svg{width:34px;height:34px;flex:none}
+.dl-card h3{font-size:30px}
+.dl-card .ver{font:500 13px/1 var(--f-data);color:var(--muted)}
+.req{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.req li{display:grid;grid-template-columns:112px minmax(0,1fr);gap:12px;padding:10px 0;border-bottom:1px solid var(--line);font-size:15px}
+.req li span:first-child{font:700 11px/1.9 var(--f-data);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.dl-card>.btn,.dl-btns{align-self:flex-start;margin-top:auto}
+.dl-btns{display:flex;flex-wrap:wrap;gap:10px}
+.first{border:1px solid var(--line);border-radius:8px;background:var(--panel-2);font-size:15px}
+.first summary{cursor:pointer;padding:12px 14px;font-weight:600}
+.first p{padding:0 14px 14px;color:var(--muted)}
+.first b{color:var(--text);font-weight:600}
+.btn-coffee{border-color:color-mix(in srgb,var(--flag) 45%,var(--line));color:var(--flag);background:transparent}
+.btn-coffee:hover{background:color-mix(in srgb,var(--flag) 10%,transparent)}
+.coffee{margin-top:16px;border:1px dashed color-mix(in srgb,var(--flag) 40%,var(--line));border-radius:14px;padding:18px 28px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px 24px}
+.coffee p{color:var(--muted);font-size:15px;max-width:60ch}
+.coffee b{color:var(--text);font-weight:600}
+.camera{margin-top:16px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 28px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px 28px;align-items:baseline}
+.camera h3{font-size:19px}
+.camera p{color:var(--muted);font-size:15px}
+@media (max-width:600px){.camera{grid-template-columns:1fr}}
+
+footer{margin-top:110px;border-top:1px solid var(--line);padding-block:28px 40px;color:var(--muted);font-size:14px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between;align-items:center}
+footer a{color:var(--muted)}
+</style>
+</head>
+<body>
+
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="chequer" aria-hidden="true"></span>Track Overlay</a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#overlay">Overlay</a>
+      <a href="#analysis">Analysis</a>
+      <a href="#features">Features</a>
+      <a href="#download">Requirements</a>
+    </nav>
+    <a class="btn btn-primary" href="#download">Download</a>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow">Free for macOS and Windows</p>
+        <h1 style="margin-top:14px">Your lap, <em>on the video.</em></h1>
+        <p class="lede">Drop in your GoPro track-day footage. Track Overlay times every lap from the camera's GPS and motion sensors, draws the data onto the video, and shows where you're losing time.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="#download" data-dl="mac">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.8-3.2-.8-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.3 1.2 9.7.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.5-1-2.5-3.8zM14 5.5c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/></svg>
+            Download for macOS
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/sirbean9/track-overlay-app/releases/latest/download/TrackOverlay-win-x64.zip" data-dl="win">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.1 10.4 4v7.1H3V5.1zm0 13.8 7.4 1.1v-7H3v5.9zM11.3 3.9 21 2.5v8.6h-9.7V3.9zm0 16.2 9.7 1.4v-8.5h-9.7v7.1z"/></svg>
+            Download for Windows
+          </a>
+        </div>
+        <p class="fine">GoPro HERO5 or newer with GPS on. Everything runs on your computer.</p>
+      </div>
+      <div class="shot">
+        <img src="img/hero.webp" width="1280" height="720" alt="In-car GoPro frame at Watkins Glen with the lap timer, sector splits, track map, speedometer reading 90 mph and a G-meter drawn over the video.">
+      </div>
+    </div>
+
+    <div class="readout" aria-label="Example session: Watkins Glen International, 8 laps">
+      <div class="wrap">
+        <div class="tag"><b>Watkins Glen</b><span>One session, straight off the camera</span></div>
+        <div class="cell"><span class="k">Best lap</span><span class="v best">2:22.212</span><span class="s">Lap 4</span></div>
+        <div class="cell"><span class="k">Theoretical</span><span class="v">2:19.274</span><span class="s">−2.938 on best</span></div>
+        <div class="cell"><span class="k">Top speed</span><span class="v">140</span><span class="s">mph</span></div>
+        <div class="cell"><span class="k">Max lateral</span><span class="v">1.29 G</span><span class="s">Motion sensor</span></div>
+      </div>
+    </div>
+  </div>
+
+  <section id="overlay">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">On the video</p>
+        <h2>Timing you can watch back</h2>
+        <p class="lede">Drag and resize each widget. What you see in the preview is what gets rendered.</p>
+      </div>
+
+      <div class="tiles">
+        <div class="tile span-4">
+          <figure><img class="w-lg" src="img/predicted.webp" width="429" height="391" alt="Lap timer at 1:40.00 on lap 5, a live delta of +5.40 to the best lap, and a predicted lap time of 2:27.61."></figure>
+          <div class="cap"><h3>Predicted lap</h3><p>The lap you're on pace for, live.</p></div>
+        </div>
+        <div class="tile span-4">
+          <figure><img class="w-md" src="img/ghost-map.webp" width="378" height="378" alt="Watkins Glen track map with a yellow dot for the car and a white ghost dot for the best lap just behind it."></figure>
+          <div class="cap"><h3>Ghost on the map</h3><p>Where your best lap was at this moment.</p></div>
+        </div>
+        <div class="tile span-4">
+          <figure style="gap:14px;align-content:center">
+            <img class="w-md" src="img/trap.webp" width="379" height="94" alt="Speed trap 1 at 129.1 mph, 11.1 slower than best.">
+            <img class="w-md" src="img/slip.webp" width="300" height="100" alt="Slip angle gauge reading plus 4.5 degrees, oversteer.">
+          </figure>
+          <div class="cap"><h3>Speed traps and slip angle</h3><p>Trap speed at any point, plus oversteer and understeer from the gyro.</p></div>
+        </div>
+
+        <div class="tile span-6">
+          <figure><img class="w-sm" src="img/gmeter.webp" width="170" height="170" alt="G-meter at 1.08 G with a dotted outline of the session's grip envelope."></figure>
+          <div class="cap"><h3>Sensor G-meter</h3><p>From the camera's 200 Hz accelerometer, with your grip envelope behind it.</p></div>
+        </div>
+        <div class="tile span-6">
+          <figure><img class="w-md" src="img/speed-trace.webp" width="335" height="125" alt="Speed trace strip: the current lap in yellow over lap 5 in purple."></figure>
+          <div class="cap"><h3>Live speed trace</h3><p>This lap's speed drawn over your reference lap.</p></div>
+        </div>
+
+        <div class="tile span-12 wide endcard">
+          <figure><img src="img/endcard.webp" width="830" height="407" alt="Session summary end card: Watkins Glen International, best lap 2:22.212, theoretical 2:19.274, 8 laps, top speed 140 mph, max cornering 1.29 G, max braking 0.97 G, and a track outline."></figure>
+          <div class="cap"><h3>Session summary card</h3><p>The numbers worth sharing, at the end of your export.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="analysis">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">After the session</p>
+        <h2>Find the next second</h2>
+        <p class="lede">Every lap, sector and corner, side by side. Purple is your best.</p>
+      </div>
+
+      <div class="rows">
+        <div class="row">
+          <div class="panel-shot">
+            <img src="img/time-lost.webp" width="558" height="360" alt="Time lost per corner table for lap 4 against the best of each corner, with red bars; T9 costs the most at 0.13 seconds.">
+            <div><h3>Time lost per corner</h3><p>Each corner against your best version of it.</p></div>
+          </div>
+          <div class="panel-shot">
+            <img src="img/top-speed.webp" width="558" height="360" alt="Straights table: top speed on each straight for every lap, best values in purple.">
+            <div><h3>Top speed on straights</h3><p>Peak speed on every straight, every lap.</p></div>
+          </div>
+        </div>
+
+        <div class="tall">
+          <div class="panel-shot">
+            <img src="img/micro-sectors.webp" width="558" height="720" alt="Lap compare: two speed traces with the gap below, and a map split into 99 metre micro-sectors coloured by which lap was faster.">
+            <div><h3>Lap compare and micro-sectors</h3><p>Two laps' speed traces and the running gap, with the map coloured by which lap won each segment.</p></div>
+          </div>
+          <div class="stack">
+            <div class="panel-shot">
+              <img src="img/kerb-map.webp" width="542" height="427" alt="Track map coloured by speed with markers where the motion sensors detected kerb strikes.">
+              <div><h3>Kerb strikes</h3><p>Detected by the motion sensors and marked on the map.</p></div>
+            </div>
+            <div class="panel-shot">
+              <img src="img/consistency.webp" width="558" height="390" alt="Consistency table: spread of minimum speed, brake point and corner time per corner, with the three least consistent highlighted.">
+              <div><h3>Consistency</h3><p>Shows which corners you drive differently every lap.</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">How it works</p>
+        <h2>Import, review, export</h2>
+      </div>
+      <div class="steps">
+        <div class="step"><span class="n">STEP 1</span><h3>Import</h3><p>Drag in a session's video files. Laps, sectors and corners are found for you.</p></div>
+        <div class="step"><span class="n">STEP 2</span><h3>Review</h3><p>Compare any two laps and arrange the overlay on the video.</p></div>
+        <div class="step"><span class="n">STEP 3</span><h3>Export</h3><p>Render the best lap, any lap or the whole session, encoded on your graphics card.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">Features</p>
+        <h2>Everything included</h2>
+      </div>
+      <ul class="chips">
+          <li>Lap timer and live delta</li>
+          <li>Sector splits</li>
+          <li>Predicted lap</li>
+          <li>Track map with ghost</li>
+          <li>Speedometer</li>
+          <li>Sensor G-meter</li>
+          <li>Speed traps</li>
+          <li>Slip angle</li>
+          <li>Live speed trace</li>
+          <li>Session summary card</li>
+          <li>Theoretical best</li>
+          <li>Corner analysis</li>
+          <li>Time lost per corner</li>
+          <li>Top speed on straights</li>
+          <li>Micro-sectors</li>
+          <li>Line comparison</li>
+          <li>Brake, throttle and coast</li>
+          <li>Braking detail</li>
+          <li>Grip usage</li>
+          <li>Consistency</li>
+          <li>Kerb strikes</li>
+          <li>Hardware export, up to source resolution</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="eyebrow">Download</p>
+        <h2>Get Track Overlay</h2>
+        <p class="lede">Free. Unzip and run. The first launch needs one extra click while the builds are unsigned.</p>
+      </div>
+      <div class="dl">
+        <div class="dl-card">
+          <div class="os">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.7-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.2-2.9.9-3.7.9-.8 0-1.9-.8-3.2-.8-1.6 0-3.1 1-4 2.4-1.7 3-.4 7.3 1.2 9.7.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.2.8 1.3 0 2.2-1.2 3-2.4.9-1.4 1.3-2.7 1.3-2.8 0 0-2.5-1-2.5-3.8zM14 5.5c.7-.8 1.1-1.9 1-3-1 0-2.1.7-2.8 1.5-.6.7-1.2 1.8-1 2.9 1.1.1 2.1-.6 2.8-1.4z"/></svg>
+            <div><h3>macOS</h3><span class="ver">Version and file size added at release</span></div>
+          </div>
+          <!-- REQUIREMENTS (macOS): edit these rows as support changes. -->
+          <ul class="req">
+            <li><span>Apple silicon</span><span>macOS 12 Monterey or later</span></li>
+            <li><span>Intel</span><span>macOS 10.15 Catalina or later</span></li>
+          </ul>
+          <details class="first">
+            <summary>First launch: "cannot be opened" warning</summary>
+            <p>Move Track Overlay to Applications, right-click it and choose <b>Open</b>, then <b>Open</b> again. On macOS 15 or later, open it once, then click <b>Open Anyway</b> in <b>System Settings › Privacy &amp; Security</b>.</p>
+          </details>
+          <div class="dl-btns">
+            <a class="btn btn-primary" href="https://github.com/sirbean9/track-overlay-app/releases/latest/download/TrackOverlay-mac-arm64.zip" data-dl="mac-arm">Apple silicon <small>.zip</small></a>
+            <a class="btn btn-ghost" href="https://github.com/sirbean9/track-overlay-app/releases/latest/download/TrackOverlay-mac-x64.zip" data-dl="mac-intel">Intel <small>.zip</small></a>
+          </div>
+        </div>
+        <div class="dl-card">
+          <div class="os">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.1 10.4 4v7.1H3V5.1zm0 13.8 7.4 1.1v-7H3v5.9zM11.3 3.9 21 2.5v8.6h-9.7V3.9zm0 16.2 9.7 1.4v-8.5h-9.7v7.1z"/></svg>
+            <div><h3>Windows</h3><span class="ver">Version and file size added at release</span></div>
+          </div>
+          <!-- REQUIREMENTS (Windows): edit these rows as support changes. -->
+          <ul class="req">
+            <li><span>System</span><span>Windows 10 or 11, 64-bit (x64)</span></li>
+            <li><span>Export</span><span>Uses your NVIDIA, AMD or Intel graphics when available</span></li>
+            <li><span>ARM PCs</span><span>Supported, with slower exports</span></li>
+          </ul>
+          <details class="first">
+            <summary>First launch: "Windows protected your PC"</summary>
+            <p>Unzip the folder, run <b>Track Overlay.exe</b>, click <b>More info</b>, then <b>Run anyway</b>.</p>
+          </details>
+          <a class="btn btn-primary" href="https://github.com/sirbean9/track-overlay-app/releases/latest/download/TrackOverlay-win-x64.zip" data-dl="win">Download for Windows <small>.zip</small></a>
+        </div>
+      </div>
+      <div class="camera">
+        <h3>Cameras</h3>
+        <p>GoPro HERO5 or newer with GPS on. Motion-sensor features need HERO11 or later. HERO12 has no GPS.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top" style="font-size:18px"><span class="chequer" aria-hidden="true"></span>Track Overlay</a>
+    <span>Not affiliated with GoPro. Screenshots are from real sessions and test data.</span>
+    <a href="https://github.com/sirbean9/track-overlay-app/releases">All releases</a>
+  </div>
+</footer>
+
+</body>
+</html>
