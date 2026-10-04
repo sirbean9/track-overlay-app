@@ -6,7 +6,7 @@ Lap timing, sector splits and telemetry drawn onto your GoPro track-day footage.
 
 ## Download
 
-Get the latest version from [Releases](https://github.com/sirbean9/track-overlay-app/releases/latest):
+The first release is coming soon. Downloads will be on [Releases](https://github.com/sirbean9/track-overlay-app/releases/latest):
 
 | File | For |
 |---|---|
