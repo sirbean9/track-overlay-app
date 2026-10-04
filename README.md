@@ -6,7 +6,7 @@ Lap timing, sector splits and telemetry drawn onto your GoPro track-day footage.
 
 ## Download
 
-The first release is coming soon. Downloads will be on [Releases](https://github.com/sirbean9/track-overlay-app/releases/latest):
+Get the latest version from [Releases](https://github.com/sirbean9/track-overlay-app/releases/latest). The Windows build is coming soon.
 
 | File | For |
 |---|---|
@@ -16,4 +16,4 @@ The first release is coming soon. Downloads will be on [Releases](https://github
 
 Needs a GoPro HERO5 or newer with GPS on.
 
-The builds aren't code-signed yet. On a Mac, right-click the app and choose **Open** the first time. On Windows, click **More info**, then **Run anyway**.
+The Mac app is signed and notarized by Apple. The Windows build isn't code-signed yet, so on first launch click **More info**, then **Run anyway**.
